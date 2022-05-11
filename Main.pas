@@ -26,6 +26,9 @@ Type
     tbNotes: TToolButton;
     MainTrayIcon: TTrayIcon;
     MainApplicationEvents: TApplicationEvents;
+    aDraw: TAction;
+    aDrawNote: TAction;
+    tbDrawNote: TToolButton;
     Procedure FormCreate(Sender: TObject);
     Procedure FormResize(Sender: TObject);
     Procedure Settings1Click(Sender: TObject);
@@ -40,11 +43,13 @@ Type
     Procedure aClearAllExecute(Sender: TObject);
     Procedure tbDeleteAllClick(Sender: TObject);
     Procedure aNotesEditorExecute(Sender: TObject);
-    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-    procedure MainGridKeyPress(Sender: TObject; var Key: Char);
-    procedure MainApplicationEventsMinimize(Sender: TObject);
-    procedure MainTrayIconClick(Sender: TObject);
-    procedure MainApplicationEventsException(Sender: TObject; E: Exception);
+    Procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+    Procedure MainGridKeyPress(Sender: TObject; var Key: Char);
+    Procedure MainApplicationEventsMinimize(Sender: TObject);
+    Procedure MainApplicationEventsException(Sender: TObject; E: Exception);
+    Procedure MainTrayIconDblClick(Sender: TObject);
+    Procedure tbDrawClick(Sender: TObject);
+    Procedure aDrawNoteExecute(Sender: TObject);
     Private
         { Private declarations }
     Public
@@ -58,10 +63,10 @@ Implementation
 
 {$R *.dfm}
 
-Uses Settings, AddNew, Edit, Notes;
+Uses Settings, AddNew, Edit, Notes, Draw;
 
 Const
-    ProgramVersion = '1.1b';
+    ProgramVersion = '1.2';
     PriorityArray: Array[1..3] of String = ('Low', 'Normal', 'High');
     FixedRowCaptionsArray: Array[0..3] of String = ('№', 'Information', 'Due To', 'Priority');
     FILE_INFO: String = '\ReMind\err_log.dat';
@@ -457,12 +462,12 @@ Var
     IsFound: Boolean;
 Begin
     IsFound := False;
-    CurrentElem := SortedList.PFirst;
+    CurrentElem := SortedList.PLast;
     While (CurrentElem <> nil) and not IsFound do
     Begin
         If CurrentElem.Data.Number = Key then  
             IsFound := True;
-        CurrentElem := CurrentElem.PNext;
+        CurrentElem := CurrentElem.PPrev;
     End;
     IsAlreadyAdded := IsFound;
 End;
@@ -728,6 +733,11 @@ Begin
     End;
 End;
 
+Procedure TMainForm.aDrawNoteExecute(Sender: TObject);
+Begin
+    DrawForm.Show;
+End;
+
 Procedure TMainForm.aEditRecordExecute(Sender: TObject);
 Var
     CurrentElem: TListElem;
@@ -899,7 +909,7 @@ Begin
     End;
 End;
 
-Procedure TMainForm.MainTrayIconClick(Sender: TObject);
+Procedure TMainForm.MainTrayIconDblClick(Sender: TObject);
 Begin
     MainTrayIcon.Visible := False; 
     MainForm.Visible := True;
@@ -914,6 +924,11 @@ End;
 Procedure TMainForm.tbDeleteAllClick(Sender: TObject);
 Begin
     aClearAll.Execute;
+End;
+
+Procedure TMainForm.tbDrawClick(Sender: TObject);
+Begin
+    DrawForm.Show;
 End;
 
 End.
