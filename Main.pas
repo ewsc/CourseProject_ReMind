@@ -6,7 +6,7 @@ Uses
     Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
     Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Menus, Vcl.Grids, Vcl.StdCtrls, System.IOUtils,
     System.Actions, Vcl.ActnList, System.ImageList, Vcl.ImgList, Vcl.ToolWin, Vcl.ComCtrls,
-  Vcl.ExtCtrls, Vcl.AppEvnts;
+    Vcl.ExtCtrls, Vcl.AppEvnts;
 
 Type
     TMainForm = class(TForm)
@@ -26,6 +26,10 @@ Type
     tbNotes: TToolButton;
     MainTrayIcon: TTrayIcon;
     MainApplicationEvents: TApplicationEvents;
+    aDrawNote: TAction;
+    tbDrawNote: TToolButton;
+    aSetNotification: TAction;
+    tbSetNotification: TToolButton;
     Procedure FormCreate(Sender: TObject);
     Procedure FormResize(Sender: TObject);
     Procedure Settings1Click(Sender: TObject);
@@ -40,11 +44,14 @@ Type
     Procedure aClearAllExecute(Sender: TObject);
     Procedure tbDeleteAllClick(Sender: TObject);
     Procedure aNotesEditorExecute(Sender: TObject);
-    procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
-    procedure MainGridKeyPress(Sender: TObject; var Key: Char);
-    procedure MainApplicationEventsMinimize(Sender: TObject);
-    procedure MainTrayIconClick(Sender: TObject);
-    procedure MainApplicationEventsException(Sender: TObject; E: Exception);
+    Procedure FormCloseQuery(Sender: TObject; var CanClose: Boolean);
+    Procedure MainGridKeyPress(Sender: TObject; var Key: Char);
+    Procedure MainApplicationEventsMinimize(Sender: TObject);
+    Procedure MainApplicationEventsException(Sender: TObject; E: Exception);
+    Procedure MainTrayIconDblClick(Sender: TObject);
+    Procedure tbDrawClick(Sender: TObject);
+    Procedure aDrawNoteExecute(Sender: TObject);
+    Procedure aSetNotificationExecute(Sender: TObject);
     Private
         { Private declarations }
     Public
@@ -58,10 +65,11 @@ Implementation
 
 {$R *.dfm}
 
-Uses Settings, AddNew, Edit, Notes;
+Uses Settings, AddNew, Edit, Notes, Draw, Notification;
 
 Const
-    ProgramVersion = '1.1b';
+
+    ProgramVersion = '1.2';
     PriorityArray: Array[1..3] of String = ('Low', 'Normal', 'High');
     FixedRowCaptionsArray: Array[0..3] of String = ('№', 'Information', 'Due To', 'Priority');
     FILE_INFO: String = '\ReMind\err_log.dat';
@@ -73,7 +81,7 @@ Type
         About: String[255];
         Priority: Byte;
         DueTo: TDateTime;
-        IsDone: Boolean;    
+        IsDone: Boolean;
     End;
     TListElem = ^TElement;
     TElement = Record
@@ -89,6 +97,7 @@ Type
 Var
     MainList, SortedList: TList;
     OrderAsc: Boolean = True;
+    EditingRowIndicator: Integer;
 
 Procedure DeleteList(var GivenList : TList);
 Var
@@ -457,12 +466,12 @@ Var
     IsFound: Boolean;
 Begin
     IsFound := False;
-    CurrentElem := SortedList.PFirst;
+    CurrentElem := SortedList.PLast;
     While (CurrentElem <> nil) and not IsFound do
     Begin
         If CurrentElem.Data.Number = Key then  
             IsFound := True;
-        CurrentElem := CurrentElem.PNext;
+        CurrentElem := CurrentElem.PPrev;
     End;
     IsAlreadyAdded := IsFound;
 End;
@@ -557,19 +566,13 @@ Begin
             Case SortBy of
                 1:
                     If (CompareDescription(IsAsc, ComparingElement.Data.About[1], CurrentElement.Data.About[1]) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
                         ComparingElement := CurrentElement;
-                    End;
                 2:
                     If (CompareDate(IsAsc, ComparingElement.Data.DueTo, CurrentElement.Data.DueTo) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
                         ComparingElement := CurrentElement;
-                    End;
                 3:
                     If (ComparePriority(IsAsc, ComparingElement.Data.Priority, CurrentElement.Data.Priority) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
                         ComparingElement := CurrentElement;
-                    End;
             End;
             CurrentElement := CurrentElement.PNext;
         End;
@@ -584,7 +587,7 @@ Var
     FoundIn, I: Byte;
 Begin
     FoundIn := 100;
-    For I := 0 to 3 do
+    For I := 0 to MainGrid.ColCount - 1 do
     Begin
         If (MainGrid.Cells[I, 0] = FixedRowCaptionsArray[I] + ' ▲') or (MainGrid.Cells[I, 0] = FixedRowCaptionsArray[I] + ' ▼') then
             FoundIn := I;
@@ -646,7 +649,7 @@ End;
 
 Procedure TMainForm.AddNew1Click(Sender: TObject);
 Begin
-    AddNewForm.Show;
+    AddNewForm.ShowModal;
 End;
 
 Procedure DeleteListItem(var GivenList: TList; var DeletingElem : TListElem);
@@ -715,7 +718,7 @@ Procedure TMainForm.aDeleteRecordExecute(Sender: TObject);
 Var
     DeletingElement: TListElem;
 Begin
-    DeletingElement := GetByNum(MainList, StrToInt(EditForm.SelectedRowIndicator.Caption));
+    DeletingElement := GetByNum(MainList, EditingRowIndicator);
     DeleteListItem(MainList, DeletingElement);
     SaveList;
     OrderListAgain;
@@ -726,6 +729,11 @@ Begin
         OrderAsc := not OrderAsc;
         MainGrid.OnFixedCellClick(MainGrid, GetCurrentlySortedCol(MainGrid), 0);
     End;
+End;
+
+Procedure TMainForm.aDrawNoteExecute(Sender: TObject);
+Begin
+    DrawForm.ShowModal;
 End;
 
 Procedure TMainForm.aEditRecordExecute(Sender: TObject);
@@ -739,7 +747,7 @@ Begin
     IsAlreadyEdited := False;
     While (CurrentElem <> nil) and not (IsAlreadyEdited) do
     Begin
-        If ElementNumber = StrToInt(EditForm.SelectedRowIndicator.Caption) then
+        If ElementNumber = EditingRowIndicator then
         Begin
             With CurrentElem.Data do
             Begin
@@ -767,13 +775,19 @@ End;
 
 Procedure TMainForm.aNotesEditorExecute(Sender: TObject);
 Begin
-    NotesForm.Show;
+    NotesForm.ShowModal;
     NotesForm.aStartController.Execute;
+End;
+
+Procedure TMainForm.aSetNotificationExecute(Sender: TObject);
+Begin
+    NotificationForm.aSetComboBox.Execute;
+    NotificationForm.ShowModal;
 End;
 
 Procedure TMainForm.aSettingsExecute(Sender: TObject);
 Begin
-    SettingsForm.Show;
+    SettingsForm.ShowModal;
 End;
 
 Procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -786,9 +800,6 @@ Begin
     Else
     Begin
         CanClose := False;
-        MainForm.Visible := False;
-        MainTrayIcon.Icon := Application.Icon; 
-        MainTrayIcon.Visible := True;
     End;
 End;
 
@@ -804,9 +815,10 @@ Begin
         CreateNewFiles();
     RewriteGeneralFiles;
     ReadFileData;
-    //EditReadOnlyStatus(False);
     PrintList(MainGrid, MainList);
     Self.Caption := Self.Caption + ' v' + ProgramVersion;
+
+    aSetNotification.Execute;
 End;
 
 Procedure TMainForm.FormResize(Sender: TObject);
@@ -815,8 +827,6 @@ Begin
 End;
 
 Procedure SetEditFormProperties(MainGrid: TStringGrid; Row: Integer);
-Var
-    CaretPosition: TPoint;
 Begin
     With EditForm do
     Begin
@@ -831,9 +841,9 @@ Begin
                 PriorityBox1.ItemIndex := 1
             Else If Cells[3, Row] = 'Low' then
                 PriorityBox1.ItemIndex := 0;
-            SelectedRowIndicator.Caption := Cells[0, Row];
+            EditingRowIndicator := StrToInt(Cells[0, Row]);
         End;
-        Show;
+        ShowModal;
     End;
 End;
 
@@ -845,7 +855,7 @@ End;
 Procedure TMainForm.MainApplicationEventsMinimize(Sender: TObject);
 Begin
     MainForm.Visible := False;
-    MainTrayIcon.Icon := Application.Icon;
+    //MainTrayIcon.Icon := Application.Icon;
     MainTrayIcon.Visible := True; 
 End;
 
@@ -871,7 +881,6 @@ Begin
             MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▲'
         Else
             MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼';
-        OrderAsc := not OrderAsc;
         PrintList(MainGrid, SortedList);
     End;
     If ACol = 0 then
@@ -887,8 +896,8 @@ Begin
             MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▲';
             PrintListBackwards(MainGrid, MainList, GetListSize(MainList));
         End;
-        OrderAsc := not OrderAsc;
     End;
+    OrderAsc := not OrderAsc;
 End;
 
 Procedure TMainForm.MainGridKeyPress(Sender: TObject; var Key: Char);
@@ -899,21 +908,28 @@ Begin
     End;
 End;
 
-Procedure TMainForm.MainTrayIconClick(Sender: TObject);
+Procedure TMainForm.MainTrayIconDblClick(Sender: TObject);
 Begin
-    MainTrayIcon.Visible := False; 
+    MainTrayIcon.Visible := False;
     MainForm.Visible := True;
     MainForm.WindowState := wsNormal;
+    MainForm.FormStyle := fsStayOnTop;
+    MainForm.FormStyle := fsNormal;
 End;
 
 Procedure TMainForm.Settings1Click(Sender: TObject);
 Begin
-    SettingsForm.Show;
+    SettingsForm.ShowModal;
 End;
 
 Procedure TMainForm.tbDeleteAllClick(Sender: TObject);
 Begin
     aClearAll.Execute;
+End;
+
+Procedure TMainForm.tbDrawClick(Sender: TObject);
+Begin
+    DrawForm.ShowModal;
 End;
 
 End.
