@@ -5,7 +5,7 @@ Interface
 Uses
     Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
     Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.WinXCalendars, System.DateUtils,
-  System.Actions, Vcl.ActnList;
+  System.Actions, Vcl.ActnList, Vcl.ComCtrls, Vcl.WinXPickers;
 
 Type
     TEditForm = class(TForm)
@@ -17,7 +17,6 @@ Type
         DatePick1: TCalendarPicker;
     EditButton1: TButton;
         CloseButton1: TButton;
-    SelectedRowIndicator: TLabel;
     EditActionList: TActionList;
     aSetPriorities: TAction;
     DeleteButton1: TButton;
