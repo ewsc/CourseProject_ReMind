@@ -33,6 +33,11 @@ Type
     tbChangeTheme: TToolButton;
     aSafeNotes: TAction;
     tbSafe: TToolButton;
+    MainSaveDialog: TSaveDialog;
+    aSaveRecords: TAction;
+    tbSaveRec: TToolButton;
+    aHelp: TAction;
+    tbHelp: TToolButton;
     Procedure FormCreate(Sender: TObject);
     Procedure FormResize(Sender: TObject);
     Procedure Settings1Click(Sender: TObject);
@@ -56,6 +61,8 @@ Type
     Procedure aSetNotificationExecute(Sender: TObject);
     procedure aChangeThemeExecute(Sender: TObject);
     procedure aSafeNotesExecute(Sender: TObject);
+    procedure aSaveRecordsExecute(Sender: TObject);
+    procedure aHelpExecute(Sender: TObject);
     Private
         { Private declarations }
     Public
@@ -534,7 +541,7 @@ Begin
         Begin
             DueTo := DatePick1.Date;
             Priority := PriorityBox1.ItemIndex + 1;
-            About := InformationMemo1.Text;
+            About := String(InformationMemo1.Text);
         End;
     End;
     If ElementIsUnique(NewListElement) then
@@ -588,6 +595,7 @@ Begin
         // EDIT_LIGHT
         EditForm.Color := clWhite;
         EditForm.Font.Color := clBlack;
+        aChangeTheme.ImageIndex := 5;
     End
     Else
     Begin
@@ -617,6 +625,7 @@ Begin
         // EDIT_DARK
         EditForm.Color := $323232;
         EditForm.Font.Color := clWhite;
+        aChangeTheme.ImageIndex := 7;
     End;
 End;
 
@@ -760,6 +769,24 @@ Begin
     End;
 End;
 
+Procedure TMainForm.aHelpExecute(Sender: TObject);
+Begin
+    ShowMessage('Welcome to Re:Mind Aplication! This is short user guide.' + #13#10 + #13#10 +
+                '[Adding new record] Press first Button in toolbar (Plus icon), fill in the fields, and press add.' + #13#10 + #13#10 +
+                '[Sorting] Pressing on fixed cells, will sort your records, according on field to sort you clicked.' + #13#10 + #13#10 +
+                '[Editing] Double click on record, to show edit form. After editing, click "Edit" button to save your changes.' + #13#10 + #13#10 +
+                '[Deleting] Double click on record you want to delete, then in right low corner press "Delete" button to delete record.' + #13#10 + #13#10 +
+                '[Note Editor] Press second button in toolbar (Note icon). Now you can write down anything, then just close this form. Thing that you wrote, would be saved and available next time.' + #13#10 + #13#10 +
+                '[Drawing] Press third button in toolbar (Palette icon). Select color and draw, drawings would be saved. Furthermore, drawn image saved in your Documents path.' + #13#10 + #13#10 +
+                '[Notifications] Press fourth button in toolbar (Bell icon). Fill the fields and you will be notificated when time runs out.' + #13#10 + #13#10 +
+                '[Secret space] Press fifth button in toolbar (Lock icon). First time, set your password, next times re-enter it. All your secret data would be encrypted and saved.' + #13#10 + #13#10 +
+                '[Export Record] Press sixth button in toolbar (Down arrow icon). Select location and file, then click save. In set path, will created .txt file with your records' + #13#10 + #13#10 +
+                '[Change Theme] Press eighth button in toolbar (Display icon) to change theme. Next click will revert theme.' + #13#10 + #13#10 +
+                '[Delete All Records] Press ninth button in toolbar (Cross icon) to delete all records.' + #13#10 + #13#10 +
+                '[Minimizing application] By minimizing your main window, application will stay in tray. You can maximize it back by double clicking tray icon.' + #13#10 + #13#10 +
+                'Created by Azam "gthanksg" Alamov, 2022. Made by the power of love, coffee and deadlines <3');
+End;
+
 Procedure TMainForm.aNotesEditorExecute(Sender: TObject);
 Begin
     NotesForm.ShowModal;
@@ -799,6 +826,32 @@ Begin
     LoginForm.ShowModal;
 End;
 
+Procedure TMainForm.aSaveRecordsExecute(Sender: TObject);
+Var
+    FRes: TextFile;
+    I, J: Integer;
+Begin
+    MainSaveDialog.InitialDir := TPath.GetDownloadsPath;
+    If MainSaveDialog.Execute() then
+    Begin
+        AssignFile(FRes, MainSaveDialog.FileName);
+        Rewrite(FRes);
+        For I := 1 to MainGrid.RowCount do
+        Begin
+            For J := 0 to MainGrid.ColCount - 1 do
+            Begin
+                With MainGrid do
+                Begin
+                    Write(FRes, Cells[J, I] + ' ');
+                End;
+            End;
+            WriteLn(FRes);
+        End;
+        CloseFile(FRes);
+        ShowMessage('Records saved to: [' + MainSaveDialog.FileName + ']');
+    End;
+End;
+
 Procedure TMainForm.aSetNotificationExecute(Sender: TObject);
 Begin
     NotificationForm.aSetComboBox.Execute;
@@ -818,10 +871,18 @@ Begin
     End;
 End;
 
+Procedure ShowHints();
+Begin
+    ShowMessage('Welcome!' + #13#10 + #13#10 + 'To feel yourself comfortable here, don''t forget to read short manual. Just press Ctrl + H or Hint icon on Taskbar.');
+End;
+
 Procedure CreateNewDirectory;
 Begin
     If not TDirectory.Exists(TPath.GetDocumentsPath + '\ReMind\') then
+    Begin
         TDirectory.CreateDirectory(TPath.GetDocumentsPath + '\ReMind\');
+        ShowHints;
+    End;
 End;
 
 Procedure TMainForm.FormCreate(Sender: TObject);
