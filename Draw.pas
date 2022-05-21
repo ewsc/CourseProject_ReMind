@@ -5,19 +5,19 @@ Interface
 Uses
     Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
     Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.Imaging.Pngimage, System.IOUtils,
-  Vcl.StdCtrls;
+    Vcl.StdCtrls, Vcl.ActnMan, Vcl.ActnColorMaps;
 
 Type
     TDrawForm = class(TForm)
         NoteDrawImage: TImage;
     ClearCanvas: TButton;
-    ColorPicker: TComboBox;
+    PenColorBox: TColorBox;
         Procedure FormCreate(Sender: TObject);
     procedure NoteDrawImageMouseMove(Sender: TObject; Shift: TShiftState; X,
       Y: Integer);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure ClearCanvasClick(Sender: TObject);
-    procedure ColorPickerChange(Sender: TObject);
+    procedure PenColorBoxChange(Sender: TObject);
     Private
          { Private declarations }
     Public
@@ -58,9 +58,9 @@ Begin
     PenColor := StringToColor(ColorPicker.Text);
 End;
 
-Procedure TDrawForm.ColorPickerChange(Sender: TObject);
+Procedure TDrawForm.PenColorBoxChange(Sender: TObject);
 Begin
-    SetPenColor(NoteDrawImage, ColorPicker);
+    PenColor := PenColorBox.Selected;
 End;
 
 Procedure TDrawForm.FormClose(Sender: TObject; var Action: TCloseAction);
@@ -105,7 +105,7 @@ Begin
     PNG := TPNGObject.Create;
     PNG.LoadFromFile(TPath.GetDocumentsPath + FILE_IMAGE);
     NoteDrawImage.Canvas.Draw(0, 0, PNG);
-    SetColorPicker(ColorPicker); 
+    //SetColorPicker(ColorPicker);
 End;
 
 Procedure TDrawForm.NoteDrawImageMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);

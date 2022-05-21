@@ -6,7 +6,7 @@ Uses
     Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
     Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Menus, Vcl.Grids, Vcl.StdCtrls, System.IOUtils,
     System.Actions, Vcl.ActnList, System.ImageList, Vcl.ImgList, Vcl.ToolWin, Vcl.ComCtrls,
-  Vcl.ExtCtrls, Vcl.AppEvnts;
+    Vcl.ExtCtrls, Vcl.AppEvnts;
 
 Type
     TMainForm = class(TForm)
@@ -16,7 +16,6 @@ Type
     MainActionList: TActionList;
     aAddNew: TAction;
     tbAddNew: TToolButton;
-    aSettings: TAction;
     aAddRecord: TAction;
     aEditRecord: TAction;
     aDeleteRecord: TAction;
@@ -26,15 +25,19 @@ Type
     tbNotes: TToolButton;
     MainTrayIcon: TTrayIcon;
     MainApplicationEvents: TApplicationEvents;
-    aDraw: TAction;
     aDrawNote: TAction;
     tbDrawNote: TToolButton;
+    aSetNotification: TAction;
+    tbSetNotification: TToolButton;
+    aChangeTheme: TAction;
+    tbChangeTheme: TToolButton;
+    aSafeNotes: TAction;
+    tbSafe: TToolButton;
     Procedure FormCreate(Sender: TObject);
     Procedure FormResize(Sender: TObject);
     Procedure Settings1Click(Sender: TObject);
     Procedure AddNew1Click(Sender: TObject);
     Procedure aAddNewExecute(Sender: TObject);
-    Procedure aSettingsExecute(Sender: TObject);
     Procedure aAddRecordExecute(Sender: TObject);
     Procedure MainGridDblClick(Sender: TObject);
     Procedure aEditRecordExecute(Sender: TObject);
@@ -50,6 +53,9 @@ Type
     Procedure MainTrayIconDblClick(Sender: TObject);
     Procedure tbDrawClick(Sender: TObject);
     Procedure aDrawNoteExecute(Sender: TObject);
+    Procedure aSetNotificationExecute(Sender: TObject);
+    procedure aChangeThemeExecute(Sender: TObject);
+    procedure aSafeNotesExecute(Sender: TObject);
     Private
         { Private declarations }
     Public
@@ -63,14 +69,16 @@ Implementation
 
 {$R *.dfm}
 
-Uses Settings, AddNew, Edit, Notes, Draw;
+Uses Settings, AddNew, Edit, Notes, Draw, Notification, Login, Secrets;
 
 Const
-    ProgramVersion = '1.2';
+    ProgramVersion = '1.4';
     PriorityArray: Array[1..3] of String = ('Low', 'Normal', 'High');
     FixedRowCaptionsArray: Array[0..3] of String = ('№', 'Information', 'Due To', 'Priority');
-    FILE_INFO: String = '\ReMind\err_log.dat';
+    FILE_LOGS: String = '\ReMind\logs.dat';
     FILE_REMINDERS: String = '\ReMind\reminders.dat';
+    FILE_SECRETS: String = '\ReMind\secrets.dat';
+    
 
 Type
     TLog = Record
@@ -78,7 +86,6 @@ Type
         About: String[255];
         Priority: Byte;
         DueTo: TDateTime;
-        IsDone: Boolean;    
     End;
     TListElem = ^TElement;
     TElement = Record
@@ -91,9 +98,13 @@ Type
         PLast: TListElem;
     End;
 
+
+
 Var
     MainList, SortedList: TList;
     OrderAsc: Boolean = True;
+    EditingRowIndicator: Integer;
+    IsLightTheme: Boolean = True;
 
 Procedure DeleteList(var GivenList : TList);
 Var
@@ -152,11 +163,6 @@ Begin
     End;
 End;
 
-Function CheckFirstLaunch() : Boolean;
-Begin
-    CheckFirstLaunch := not FileExists(TPath.GetDocumentsPath + FILE_INFO);
-End;
-
 Function GetListSize(const GivenList: TList) : Integer;
 Var
     Size: Integer;
@@ -172,21 +178,12 @@ Begin
     GetListSize := Size;
 End;
 
-Procedure CreateNewFiles();
-Var
-    NewFile: TextFile;
-Begin
-    Createdir(TPath.GetDocumentsPath + '\ReMind\');
-    AssignFile(NewFile, TPath.GetDocumentsPath + FILE_INFO);
-    Rewrite(NewFile);
-End;
-
 Procedure RewriteGeneralFiles();
 Var
     GeneralFile: TextFile;
     LaunchTime: TDateTime;
 Begin
-    AssignFile(GeneralFile, TPath.GetDocumentsPath + FILE_INFO);
+    AssignFile(GeneralFile, TPath.GetDocumentsPath + FILE_LOGS);
     Rewrite(GeneralFile);
     WriteLn(GeneralFile, 'Re:Mind version ' + ProgramVersion);
     LaunchTime := Now;
@@ -196,109 +193,15 @@ End;
 
 Procedure AddGeneralErrorReport(ErrorMessage: String);
 Var
+
     GeneralFile: TextFile;
     ErrorTime: TDateTime;
 Begin
-    AssignFile(GeneralFile, TPath.GetDocumentsPath + FILE_INFO);
+    AssignFile(GeneralFile, TPath.GetDocumentsPath + FILE_LOGS);
     Append(GeneralFile);
     ErrorTime := Now;
     Writeln(GeneralFile, '[' + TimeToStr(ErrorTime) + '] ' + ErrorMessage);
     Close(GeneralFile);    
-End;
-
-Function GetLogDescription(Line: String; LineAddress: Integer; Var CurrentChar: Integer) : String;
-Var
-    LogDescription: String;
-Begin
-    LogDescription := '';
-    If (Line[1] = '[') then
-    Begin   
-        CurrentChar := 2;
-        While Line[CurrentChar] <> ']' do
-        Begin
-            LogDescription := LogDescription + Line[CurrentChar];
-            Inc(CurrentChar);
-        End;
-    End
-    Else
-        AddGeneralErrorReport('Corrupted reminder description found at line #' + IntToStr(LineAddress));
-    GetLogDescription := LogDescription;
-End;
-
-Function GetLogDue(Line: String; LineAddress: Integer; Var CurrentChar: Integer) : TDateTime;
-Var
-    Day, Month, Year: String[4];
-Begin
-    Inc(CurrentChar, 2);
-    
-    While Line[CurrentChar] <> '/' do
-    Begin
-        Month := Month + Line[CurrentChar];
-        Inc(CurrentChar);
-    End;
-    Inc(CurrentChar);
-    
-    While Line[CurrentChar] <> '/' do
-    Begin
-        Day := Day + Line[CurrentChar];
-        Inc(CurrentChar);
-    End;
-    Inc(CurrentChar);
-
-    While Length(Year) <> 4 do
-    Begin
-        Year := Year + Line[CurrentChar];
-        Inc(CurrentChar);
-    End;
-
-    GetLogDue := EncodeDate(StrToInt(Year), StrToInt(Month), StrToInt(Day));
-End;
-
-Function GetLogPriority(Line: String; LineAdress: Integer; Var CurrentChar: Integer) : Byte;
-Var
-    Priority: Byte;
-Begin
-    Priority := 0;
-    Inc(CurrentChar);
-    Try    
-        Priority := StrToInt(Line[CurrentChar]);
-    Except
-        AddGeneralErrorReport('Corrupted reminder priority found at line #' + IntToStr(LineAdress));
-    End;
-    GetLogPriority := Priority;
-End;
-
-Function GetDoneStatus(Line: String; LineAdress: Integer; Var CurrentChar: Integer) : Boolean;
-Var
-    IsDone: Boolean;
-Begin
-    IsDone := False;
-    Inc(CurrentChar, 2);
-    
-    If Line[CurrentChar] = 'D' then
-        IsDone := True
-    Else If Line[CurrentChar] = 'N' then
-        IsDone := False
-    Else
-        AddGeneralErrorReport('Corrupted reminder status found at line #' + IntToStr(LineAdress));
-    GetDoneStatus := IsDone;
-End;
-
-Function DistributeElement(Line: String; LineAddress: Integer) : TListElem;
-Var
-    CreatedLogElement: TListElem;
-    CurrentChar: Integer;
-Begin
-    New(CreatedLogElement);
-    CurrentChar := 1;
-    With CreatedLogElement.Data do
-    Begin
-        About := GetLogDescription(Line, LineAddress, CurrentChar);
-        DueTo := GetLogDue(Line, LineAddress, CurrentChar);
-        Priority := GetLogPriority(Line, LineAddress, CurrentChar);
-        IsDone := GetDoneStatus(Line, LineAddress, CurrentChar);
-    End;
-    DistributeElement := CreatedLogElement;    
 End;
 
 Function ElementIsUnique(NewElement: TListElem) : Boolean;
@@ -319,10 +222,8 @@ End;
 
 Procedure ReadFileData();
 Var
-    FReminders: TextFile;
-    NewLine: String;
+    FReminders: File of TLog;
     NewElement: TListElem;
-    LineAddress: Integer;
 Begin
     AssignFile(FReminders, TPath.GetDocumentsPath + FILE_REMINDERS);
     If not FileExists(TPath.GetDocumentsPath + FILE_REMINDERS) then
@@ -331,25 +232,19 @@ Begin
     End
     Else
         Reset(FReminders);
-
-    LineAddress := 1;
-    While not EoF(FReminders) do
+    While not Eof(FReminders) do
     Begin
-        ReadLn(FReminders, NewLine);
-        //New(NewElement);
-        If NewLine <> '' then
+        New(NewElement);
+        Read(FReminders, NewElement.Data);
+        If ElementIsUnique(NewElement) then
         Begin
-            NewElement := DistributeElement(NewLine, LineAddress);
-            If ElementIsUnique(NewElement) then
-            Begin
-                NewElement.Data.Number := GetListSize(MainList) + 1;
-                AddNextElement(NewElement, MainList)
-            End
-            Else
-                ShowMessage('Reminder you are trying to add is already exists!')
-        End;
-        Inc(LineAddress);
+            NewElement.Data.Number := GetListSize(MainList) + 1;
+            AddNextElement(NewElement, MainList)
+        End
+        Else
+            ShowMessage('Reminder you are trying to add is already exists!')
     End;
+
     Close(FReminders);
 End;
 
@@ -431,12 +326,12 @@ End;
 
 Procedure TMainForm.aAddNewExecute(Sender: TObject);
 Begin
-    AddNewForm.Show;
+    AddNewForm.ShowModal;
 End;
 
 Procedure SaveList();
 Var
-    FToDoLog: TextFile;
+    FToDoLog: File of TLog;
     CurrentElem: TListElem;
 Begin
     AssignFile(FToDoLog, TPath.GetDocumentsPath + FILE_REMINDERS);
@@ -446,10 +341,7 @@ Begin
     Begin
         With CurrentElem.Data do
         Begin
-            If IsDone then
-                WriteLn(FTodoLog, '[' + About + '] ' + DateToStr(DueTo) + ' ' + IntToStr(Priority) + ' ' + 'D')
-            Else
-                WriteLn(FTodoLog, '[' + About + '] ' + DateToStr(DueTo) + ' ' + IntToStr(Priority) + ' ' + 'N');
+            Write(FToDoLog, CurrentElem.Data);
             CurrentElem := CurrentElem.PNext;
         End;
     End;
@@ -538,49 +430,80 @@ Begin
     End;
 End;
 
+Function GeneralComporator(ComparatorID: Byte; GivenElemA, GivenElemB: TListElem; IsAsc: Boolean) : Integer;
+Begin
+    Case ComparatorID of
+        1: Result := CompareDescription(IsAsc, GivenElemA.Data.About[1], GivenElemB.Data.About[1]);
+        2: Result := CompareDate(IsAsc, GivenElemA.Data.DueTo, GivenElemB.Data.DueTo);
+        3: Result := ComparePriority(IsAsc, GivenElemA.Data.Priority, GivenElemB.Data.Priority);
+    End;
+End;
+
+Procedure AddAsFirstElement(var GivenList: TList; const NewElem: TListElem);
+Begin
+    NewElem^.PNext := nil;
+    NewElem^.PPrev := nil;
+    If GivenList.PFirst = nil then
+    Begin
+        GivenList.PFirst := NewElem;
+        GivenList.PLast := NewElem;
+    End
+    Else
+    Begin
+        NewElem^.PNext := GivenList.PFirst;
+        GivenList.PFirst^.PPrev := NewElem;
+        GivenList.PFirst := NewElem;
+    End;
+End;
+
+Procedure InsertBefore(var GivenList: TList; const BeforeThisElem, NewElem: TListElem);
+Begin
+    If (GivenList.PFirst = nil) or (BeforeThisElem = nil) or (BeforeThisElem = GivenList.PFirst) then
+    Begin
+        AddAsFirstElement(GivenList, NewElem);
+    End
+    Else
+    Begin
+        NewElem^.PPrev := BeforeThisElem^.PPrev;
+        NewElem^.PNext := BeforeThisElem;
+        BeforeThisElem^.PPrev := NewElem;
+        NewElem^.PPrev^.PNext := NewElem;
+    End;
+End;
+
 Procedure SortList(IsAsc: Boolean; SortBy: Byte);
 Var
-    ComparingElement, CurrentElement, NewElement: TListElem;
+    CurrentElement, NewElement, ComparingElement: TListElem;
+    IsSortedElem: Boolean;
 Begin
-    While GetListSize(SortedList) <> GetListSize(MainList) do
+    CurrentElement := MainList.PFirst;
+    New(NewElement);
+    NewElement.Data := CurrentElement.Data;
+    AddNextElement(NewElement, SortedList);
+    CurrentElement := CurrentElement.PNext;
+    While CurrentElement <> nil do
     Begin
-        
-        CurrentElement := MainList.PFirst;
-        While CurrentElement <> nil do
+        ComparingElement := SortedList.PFirst;
+        IsSortedElem := False;
+        While (ComparingElement <> nil) and not IsSortedElem do
         Begin
-            If not IsAlreadyAdded(CurrentElement.Data.Number) then
+            If GeneralComporator(SortBy, CurrentElement, ComparingElement, IsAsc) = 1 then
             Begin
-                ComparingElement := CurrentElement;
-                Break;
+                New(NewElement);
+                NewElement.Data := CurrentElement.Data;
+                InsertBefore(SortedList, ComparingElement, NewElement);
+                IsSortedElem := True;    
+            End
+            Else If ComparingElement.PNext = nil then
+            Begin
+                New(NewElement);
+                NewElement.Data := CurrentElement.Data;
+                AddNextElement(NewElement, SortedList);
+                IsSortedElem := True;
             End;
-            CurrentElement := CurrentElement.PNext;
+            ComparingElement := ComparingElement.PNext;
         End;
-        CurrentElement := MainList.PFirst;
-
-        While CurrentElement <> nil do
-        Begin
-            Case SortBy of
-                1:
-                    If (CompareDescription(IsAsc, ComparingElement.Data.About[1], CurrentElement.Data.About[1]) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
-                        ComparingElement := CurrentElement;
-                    End;
-                2:
-                    If (CompareDate(IsAsc, ComparingElement.Data.DueTo, CurrentElement.Data.DueTo) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
-                        ComparingElement := CurrentElement;
-                    End;
-                3:
-                    If (ComparePriority(IsAsc, ComparingElement.Data.Priority, CurrentElement.Data.Priority) = 1) and not (IsAlreadyAdded(CurrentElement.Data.Number)) then
-                    Begin
-                        ComparingElement := CurrentElement;
-                    End;
-            End;
-            CurrentElement := CurrentElement.PNext;
-        End;
-        New(NewElement);
-        NewElement.Data := ComparingElement.Data;
-        AddNextElement(NewElement, SortedList);
+        CurrentElement := CurrentElement.PNext;
     End;
 End;
 
@@ -589,7 +512,7 @@ Var
     FoundIn, I: Byte;
 Begin
     FoundIn := 100;
-    For I := 0 to 3 do
+    For I := 0 to MainGrid.ColCount - 1 do
     Begin
         If (MainGrid.Cells[I, 0] = FixedRowCaptionsArray[I] + ' ▲') or (MainGrid.Cells[I, 0] = FixedRowCaptionsArray[I] + ' ▼') then
             FoundIn := I;
@@ -609,7 +532,6 @@ Begin
     Begin
         With AddNewForm do
         Begin
-            IsDone := False;
             DueTo := DatePick1.Date;
             Priority := PriorityBox1.ItemIndex + 1;
             About := InformationMemo1.Text;
@@ -635,6 +557,69 @@ Begin
     AddNewForm.Close;
 End;
 
+Procedure TMainForm.aChangeThemeExecute(Sender: TObject);
+Begin
+    IsLightTheme := not IsLightTheme;
+    If IsLightTheme then
+    Begin
+        // GRID_LIGHT
+        MainGrid.Color := clWhite;
+        MainGrid.Font.Color := clBlack;
+        MainGrid.GradientStartColor := clSkyBlue;
+        MainGrid.GradientEndColor := clSkyBlue;
+        // TOOLBAR_LIGHT
+        MainToolBar.GradientStartColor := clSkyBlue;
+        MainToolBar.GradientEndColor := clSkyBlue;
+        // ADDNEW_LIGHT
+        AddNewForm.Color := clWhite;
+        AddNewForm.Font.Color := clBlack;
+        // NOTES_LIGHT
+        NotesForm.NotesMemo.Color := clWhite;
+        NotesForm.NotesMemo.Font.Color := clBlack;
+        // NOTIF_LIGHT
+        NotificationForm.Color := clWhite;
+        NotificationForm.Font.Color := clBlack;
+        // LOGIN_LIGHT
+        LoginForm.Color := clWhite;
+        LoginForm.Font.Color := clBlack;
+        // SECRET_LIGHT
+        SecretForm.Color := clWhite;
+        SecretForm.Font.Color := clBlack;
+        // EDIT_LIGHT
+        EditForm.Color := clWhite;
+        EditForm.Font.Color := clBlack;
+    End
+    Else
+    Begin
+        // GRID_DARK
+        MainGrid.Color := $323232;
+        MainGrid.Font.Color := clWhite;
+        MainGrid.GradientStartColor := $515151;
+        MainGrid.GradientEndColor := $515151;
+        // TOOLBAR_DARK
+        MainToolBar.GradientStartColor := $515151;
+        MainToolBar.GradientEndColor := $515151;
+        // ADDNEW_DARK
+        AddNewForm.Color := $323232;
+        AddNewForm.Font.Color := clWhite;
+        // NOTES_DARK
+        NotesForm.NotesMemo.Color := $323232;
+        NotesForm.NotesMemo.Font.Color := clWhite;// NOTIF_LIGHT
+        // NOTIF_DARK
+        NotificationForm.Color := $323232;
+        NotificationForm.Font.Color := clWhite;
+        // LOGIN_DARK
+        LoginForm.Color := $323232;
+        LoginForm.Font.Color := clWhite;
+        // SECRETS_DARK
+        SecretForm.Color := $323232;
+        SecretForm.Font.Color := clWhite;
+        // EDIT_DARK
+        EditForm.Color := $323232;
+        EditForm.Font.Color := clWhite;
+    End;
+End;
+
 Procedure TMainForm.aClearAllExecute(Sender: TObject);
 Var
     IsConfirmed: Byte;
@@ -651,7 +636,7 @@ End;
 
 Procedure TMainForm.AddNew1Click(Sender: TObject);
 Begin
-    AddNewForm.Show;
+    AddNewForm.ShowModal;
 End;
 
 Procedure DeleteListItem(var GivenList: TList; var DeletingElem : TListElem);
@@ -720,7 +705,7 @@ Procedure TMainForm.aDeleteRecordExecute(Sender: TObject);
 Var
     DeletingElement: TListElem;
 Begin
-    DeletingElement := GetByNum(MainList, StrToInt(EditForm.SelectedRowIndicator.Caption));
+    DeletingElement := GetByNum(MainList, EditingRowIndicator);
     DeleteListItem(MainList, DeletingElement);
     SaveList;
     OrderListAgain;
@@ -735,7 +720,7 @@ End;
 
 Procedure TMainForm.aDrawNoteExecute(Sender: TObject);
 Begin
-    DrawForm.Show;
+    DrawForm.ShowModal;
 End;
 
 Procedure TMainForm.aEditRecordExecute(Sender: TObject);
@@ -749,7 +734,7 @@ Begin
     IsAlreadyEdited := False;
     While (CurrentElem <> nil) and not (IsAlreadyEdited) do
     Begin
-        If ElementNumber = StrToInt(EditForm.SelectedRowIndicator.Caption) then
+        If ElementNumber = EditingRowIndicator then
         Begin
             With CurrentElem.Data do
             Begin
@@ -777,13 +762,47 @@ End;
 
 Procedure TMainForm.aNotesEditorExecute(Sender: TObject);
 Begin
-    NotesForm.Show;
+    NotesForm.ShowModal;
     NotesForm.aStartController.Execute;
 End;
 
-Procedure TMainForm.aSettingsExecute(Sender: TObject);
+Function PasswordIsCreated() : Boolean;
+Var
+    FSecrets: TextFile;
+    LineWithPassword: String[20];
 Begin
-    SettingsForm.Show;
+    Result := False;
+    AssignFile(FSecrets, TPath.GetDocumentsPath + FILE_SECRETS);
+    If FileExists(TPath.GetDocumentsPath + FILE_SECRETS) then
+    Begin
+        Reset(FSecrets);
+        ReadLn(FSecrets, LineWithPassword);
+        If (LineWithPassword <> '') and (LineWithPassword[1] = '!') then
+            Result := True;
+    End                  
+    Else
+    Begin
+        Rewrite(FSecrets);
+    End;
+    Close(FSecrets);
+End;
+
+Procedure TMainForm.aSafeNotesExecute(Sender: TObject);
+Var
+    PasswordExists: Boolean;
+Begin
+    PasswordExists := PasswordIsCreated();
+    If not PasswordExists then
+        LoginForm.InformationLabel.Caption := 'Set up password:'
+    Else
+        LoginForm.InformationLabel.Caption := 'Input your password:';
+    LoginForm.ShowModal;
+End;
+
+Procedure TMainForm.aSetNotificationExecute(Sender: TObject);
+Begin
+    NotificationForm.aSetComboBox.Execute;
+    NotificationForm.ShowModal;
 End;
 
 Procedure TMainForm.FormCloseQuery(Sender: TObject; var CanClose: Boolean);
@@ -796,25 +815,23 @@ Begin
     Else
     Begin
         CanClose := False;
-        MainForm.Visible := False;
-        MainTrayIcon.Icon := Application.Icon; 
-        MainTrayIcon.Visible := True;
     End;
 End;
 
+Procedure CreateNewDirectory;
+Begin
+    If not TDirectory.Exists(TPath.GetDocumentsPath + '\ReMind\') then
+        TDirectory.CreateDirectory(TPath.GetDocumentsPath + '\ReMind\');
+End;
+
 Procedure TMainForm.FormCreate(Sender: TObject);
-Var
-    IsFirstLaunch, FileHasUserName: Boolean;
 Begin
     DeleteList(MainList);
     SetColsWidth(MainGrid);
     NameFixedRows(MainGrid);
-    IsFirstLaunch := CheckFirstLaunch;
-    If IsFirstLaunch then
-        CreateNewFiles();
+    CreateNewDirectory;
     RewriteGeneralFiles;
     ReadFileData;
-    //EditReadOnlyStatus(False);
     PrintList(MainGrid, MainList);
     Self.Caption := Self.Caption + ' v' + ProgramVersion;
 End;
@@ -825,8 +842,6 @@ Begin
 End;
 
 Procedure SetEditFormProperties(MainGrid: TStringGrid; Row: Integer);
-Var
-    CaretPosition: TPoint;
 Begin
     With EditForm do
     Begin
@@ -841,9 +856,9 @@ Begin
                 PriorityBox1.ItemIndex := 1
             Else If Cells[3, Row] = 'Low' then
                 PriorityBox1.ItemIndex := 0;
-            SelectedRowIndicator.Caption := Cells[0, Row];
+            EditingRowIndicator := StrToInt(Cells[0, Row]);
         End;
-        Show;
+        ShowModal;
     End;
 End;
 
@@ -855,7 +870,6 @@ End;
 Procedure TMainForm.MainApplicationEventsMinimize(Sender: TObject);
 Begin
     MainForm.Visible := False;
-    MainTrayIcon.Icon := Application.Icon;
     MainTrayIcon.Visible := True; 
 End;
 
@@ -878,13 +892,12 @@ Begin
         SortList(OrderAsc, ACol);
         NameFixedRows(MainGrid);
         If OrderAsc then
-            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▲'
+            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼'
         Else
-            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼';
-        OrderAsc := not OrderAsc;
+            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▲';
         PrintList(MainGrid, SortedList);
-    End;
-    If ACol = 0 then
+    End
+    Else If ACol = 0 then
     Begin
         If OrderAsc then
         Begin
@@ -894,11 +907,11 @@ Begin
         Else
         Begin
             NameFixedRows(MainGrid);
-            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▲';
+            MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼';
             PrintListBackwards(MainGrid, MainList, GetListSize(MainList));
         End;
-        OrderAsc := not OrderAsc;
     End;
+    OrderAsc := not OrderAsc;
 End;
 
 Procedure TMainForm.MainGridKeyPress(Sender: TObject; var Key: Char);
@@ -911,14 +924,16 @@ End;
 
 Procedure TMainForm.MainTrayIconDblClick(Sender: TObject);
 Begin
-    MainTrayIcon.Visible := False; 
+    MainTrayIcon.Visible := False;
     MainForm.Visible := True;
     MainForm.WindowState := wsNormal;
+    MainForm.FormStyle := fsStayOnTop;
+    MainForm.FormStyle := fsNormal;
 End;
 
 Procedure TMainForm.Settings1Click(Sender: TObject);
 Begin
-    SettingsForm.Show;
+    SettingsForm.ShowModal;
 End;
 
 Procedure TMainForm.tbDeleteAllClick(Sender: TObject);
@@ -928,7 +943,7 @@ End;
 
 Procedure TMainForm.tbDrawClick(Sender: TObject);
 Begin
-    DrawForm.Show;
+    DrawForm.ShowModal;
 End;
 
 End.
