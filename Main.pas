@@ -38,6 +38,7 @@ Type
     tbSaveRec: TToolButton;
     aHelp: TAction;
     tbHelp: TToolButton;
+    MainTimer: TTimer;
     Procedure FormCreate(Sender: TObject);
     Procedure FormResize(Sender: TObject);
     Procedure Settings1Click(Sender: TObject);
@@ -59,10 +60,11 @@ Type
     Procedure tbDrawClick(Sender: TObject);
     Procedure aDrawNoteExecute(Sender: TObject);
     Procedure aSetNotificationExecute(Sender: TObject);
-    procedure aChangeThemeExecute(Sender: TObject);
-    procedure aSafeNotesExecute(Sender: TObject);
-    procedure aSaveRecordsExecute(Sender: TObject);
-    procedure aHelpExecute(Sender: TObject);
+    Procedure aChangeThemeExecute(Sender: TObject);
+    Procedure aSafeNotesExecute(Sender: TObject);
+    Procedure aSaveRecordsExecute(Sender: TObject);
+    Procedure aHelpExecute(Sender: TObject);
+    procedure MainTimerTimer(Sender: TObject);
     Private
         { Private declarations }
     Public
@@ -88,7 +90,7 @@ Const
     
 
 Type
-    TLog = Record
+    TReminder = Record
         Number: Integer;
         About: String[255];
         Priority: Byte;
@@ -96,7 +98,7 @@ Type
     End;
     TListElem = ^TElement;
     TElement = Record
-        Data: TLog;
+        Data: TReminder;
         PNext: TListElem;
         PPrev: TListElem;
     End;
@@ -229,7 +231,7 @@ End;
 
 Procedure ReadFileData();
 Var
-    FReminders: File of TLog;
+    FReminders: File of TReminder;
     NewElement: TListElem;
 Begin
     AssignFile(FReminders, TPath.GetDocumentsPath + FILE_REMINDERS);
@@ -338,7 +340,7 @@ End;
 
 Procedure SaveList();
 Var
-    FToDoLog: File of TLog;
+    FToDoLog: File of TReminder;
     CurrentElem: TListElem;
 Begin
     AssignFile(FToDoLog, TPath.GetDocumentsPath + FILE_REMINDERS);
@@ -527,11 +529,19 @@ Begin
     GetCurrentlySortedCol := FoundIn;
 End;
 
+Procedure MakeChangesSorted(MainGrid: TStringGrid);
+Begin
+    If GetCurrentlySortedCol(MainGrid) = 100 then
+        PrintList(MainGrid, MainList)
+    Else
+    Begin
+        OrderAsc := not OrderAsc;
+        MainGrid.OnFixedCellClick(MainGrid, GetCurrentlySortedCol(MainGrid), 0);
+    End;
+End;
+
 Procedure TMainForm.aAddRecordExecute(Sender: TObject);
 Var
-    Description: String;
-    DueTo: TDateTime;
-    Priority: Byte;
     NewListElement: TListElem;
 Begin
     New(NewListElement);
@@ -552,14 +562,8 @@ Begin
     Else
         ShowMessage('Reminder you are trying to add is already exists!');
 
-    If GetCurrentlySortedCol(MainGrid) = 100 then
-        PrintList(MainGrid, MainList)
-    Else
-    Begin
-        OrderAsc := not OrderAsc;
-        MainGrid.OnFixedCellClick(MainGrid, GetCurrentlySortedCol(MainGrid), 0);
-    End;
-    //PrintList(MainGrid, List);
+
+    MakeChangesSorted(MainGrid);
     SaveList;
     AddNewForm.Close;
 End;
@@ -718,13 +722,7 @@ Begin
     DeleteListItem(MainList, DeletingElement);
     SaveList;
     OrderListAgain;
-    If GetCurrentlySortedCol(MainGrid) = 100 then
-        PrintList(MainGrid, MainList)
-    Else
-    Begin
-        OrderAsc := not OrderAsc;
-        MainGrid.OnFixedCellClick(MainGrid, GetCurrentlySortedCol(MainGrid), 0);
-    End;
+    MakeChangesSorted(MainGrid);
 End;
 
 Procedure TMainForm.aDrawNoteExecute(Sender: TObject);
@@ -760,13 +758,7 @@ Begin
         CurrentElem := CurrentElem.PNext;
     End;
     SaveList;
-    If GetCurrentlySortedCol(MainGrid) = 100 then
-        PrintList(MainGrid, MainList)
-    Else
-    Begin
-        OrderAsc := not OrderAsc;
-        MainGrid.OnFixedCellClick(MainGrid, GetCurrentlySortedCol(MainGrid), 0);
-    End;
+    MakeChangesSorted(MainGrid);
 End;
 
 Procedure TMainForm.aHelpExecute(Sender: TObject);
@@ -947,11 +939,11 @@ End;
 
 Procedure TMainForm.MainGridFixedCellClick(Sender: TObject; ACol, ARow: Integer);
 Begin
+    NameFixedRows(MainGrid);
     If not (ACol = 0) then
     Begin
         DeleteList(SortedList);
         SortList(OrderAsc, ACol);
-        NameFixedRows(MainGrid);
         If OrderAsc then
             MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼'
         Else
@@ -961,13 +953,9 @@ Begin
     Else If ACol = 0 then
     Begin
         If OrderAsc then
-        Begin
-            PrintList(MainGrid, MainList);
-            NameFixedRows(MainGrid)
-        End
+            PrintList(MainGrid, MainList)
         Else
         Begin
-            NameFixedRows(MainGrid);
             MainGrid.Cells[ACol, ARow] := FixedRowCaptionsArray[ACol] + ' ▼';
             PrintListBackwards(MainGrid, MainList, GetListSize(MainList));
         End;
@@ -981,6 +969,13 @@ Begin
     Begin
         SetEditFormProperties(MainGrid, MainGrid.Row);
     End;
+End;
+
+Procedure TMainForm.MainTimerTimer(Sender: TObject);
+Begin
+    MainTimer.Enabled := False;
+    NotificationForm.aSetComboBox.Execute;
+    //NotificationForm.ShowModal;
 End;
 
 Procedure TMainForm.MainTrayIconDblClick(Sender: TObject);

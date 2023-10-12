@@ -183,7 +183,7 @@ End;
 
 Procedure TNotificationForm.aLoadAndCloseExecute(Sender: TObject);
 Begin
-    Self.Hide;
+    Self.Close;
 End;
 
 Procedure TNotificationForm.aSetComboBoxExecute(Sender: TObject);

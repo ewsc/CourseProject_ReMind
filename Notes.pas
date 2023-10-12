@@ -66,7 +66,6 @@ End;
 Procedure TNotesForm.aStartControllerExecute(Sender: TObject);
 Var
     IsFirstLaunch: Boolean;
-    FileData: String;
 Begin
     IsFirstLaunch := not FileExists(TPath.GetDocumentsPath + FILE_NOTES);
     If IsFirstLaunch then

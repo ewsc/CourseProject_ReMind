@@ -5,7 +5,7 @@ Interface
 Uses
     Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
     Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.WinXCalendars, System.DateUtils,
-  System.Actions, Vcl.ActnList, Vcl.ComCtrls, Vcl.WinXPickers;
+    System.Actions, Vcl.ActnList, Vcl.ComCtrls, Vcl.WinXPickers;
 
 Type
     TEditForm = class(TForm)
@@ -29,8 +29,8 @@ Type
     Procedure EditButton1Click(Sender: TObject);
     Procedure aSetPrioritiesExecute(Sender: TObject);
     Procedure DeleteButton1Click(Sender: TObject);
-    procedure aCloseFormExecute(Sender: TObject);
-    procedure CloseButton1Click(Sender: TObject);
+    Procedure aCloseFormExecute(Sender: TObject);
+    Procedure CloseButton1Click(Sender: TObject);
     Private
         { Private declarations }
     Public
